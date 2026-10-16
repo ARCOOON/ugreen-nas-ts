@@ -1,0 +1,68 @@
+name: TypeScript CI & Package Bundle
+
+on:
+  push:
+    branches: [ main, master ]
+    tags: [ 'v*' ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  test:
+    name: Test & Typecheck (Node ${{ matrix.node-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version: ["24", "26"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Typecheck with tsc
+        run: npx tsc --noEmit
+
+      - name: Native TypeScript import check
+        run: |
+          node --experimental-strip-types -e "import('./src/index.ts').then(m => console.log('Exported symbols:', Object.keys(m).length))"
+
+  build-package:
+    name: Build Dist & Pack (.tgz Bundle)
+    needs: test
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - name: Install dependencies & compile TypeScript
+        run: |
+          npm install
+          npm run build
+
+      - name: Verify compiled JS bundle
+        run: |
+          node -e "import('./dist/index.js').then(m => console.log('Compiled bundle verified, exports:', Object.keys(m).length))"
+
+      - name: Create installable npm tarball (.tgz)
+        run: npm pack
+
+      - name: Upload Package Artifact (.tgz & dist)
+        uses: actions/upload-artifact@v4
+        with:
+          name: ugreen-nas-ts-package
+          path: |
+            *.tgz
+            dist/
